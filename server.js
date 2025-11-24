@@ -256,6 +256,7 @@ app.get("/", (_req, res) => {
 // =========================
 app.post("/register", async (req, res) => {
   // Implement logic here based on the TODO 1.
+  return res.status(501).json({ error: "Registration not yet implemented" });
 });
 
 // =========================
@@ -263,6 +264,39 @@ app.post("/register", async (req, res) => {
 // =========================
 app.post("/login", async (req, res) => {
   // Implement logic here based on the TODO 2.
+  
+  try {
+    const { email, password } = req.body || {};
+
+    if (!email || !password) {
+      return res.status(400).json({ error: "Email and password are required" });
+    }
+    const user = users.find((u) => u.email === email);
+    if (!user) {
+
+      return res.status(400).json({ error: "User not found" }); 
+    }
+
+    const match = await bcrypt.compare(password, user.passwordHash);
+    if (!match) {
+      return res.status(400).json({ error: "Wrong password" });
+    }
+
+    // 5) Create JWT token
+    const token = jwt.sign(
+      { email },
+      JWT_SECRET, //"abc123"
+      { expiresIn: "1h" }
+    );
+
+    // 6) Return the token
+    return res.json({ token });
+  } catch (err) {
+
+    console.error("Login error:", err);
+    return res.status(500).json({ error: "Server error during login" });
+  }
+
 });
 
 // =========================
@@ -271,6 +305,67 @@ app.post("/login", async (req, res) => {
 // =========================
 app.get("/weather", async (req, res) => {
   // Implement logic here based on the TODO 3.
+
+  try {
+    const auth = req.headers.authorization;
+    if (!auth) {
+      return res.status(401).json({ error: "Missing token" });
+    }
+    const parts = auth.split(" ");
+    if (parts.length !== 2 || parts[0] !== "Bearer") {
+        return res.status(401).json({ error: "Invalid token format. Must be 'Bearer <token>'" });
+    }
+    const token = parts[1];
+
+    // 3) Verify token
+    try {
+      jwt.verify(token, JWT_SECRET); } 
+      catch (e) {
+      return res.status(401).json({ error: "Invalid token" });
+    }
+
+    const city = req.query.city;
+    if (!city) {
+      return res.status(400).json({ error: "City required" });
+    }
+
+    // 5) Prepare external weather API URL
+    const url = `https://goweather.herokuapp.com/weather/${encodeURIComponent(city)}`;
+
+    // 6) Use fetch() to call API
+    const weatherResponse = await fetch(url);
+
+    if (!weatherResponse.ok) {
+      // Try to parse error message if available, otherwise return generic error
+      try {
+        const errorData = await weatherResponse.json();
+        console.error("External weather API error:", errorData);
+      } catch (e) {
+        // If parsing fails, just log the status
+        console.error("External weather API non-JSON error status:", weatherResponse.status);
+      }
+      return res.status(502).json({ error: "Error contacting external weather API" }); 
+      // Using 502 Bad Gateway for external service error
+    }
+
+    // 7) Parse JSON
+    const data = await weatherResponse.json();
+
+    // 8) Return structured weather data
+    return res.json({
+      city,
+      temp: data.temperature,
+      description: data.description,
+      wind: data.wind,
+      raw: data  // full API response
+    });
+  } catch (err) {
+
+    console.error("Weather fetch error:", err);
+
+    return res.status(500).json({ error: "Server error during weather fetch" });
+  }
+
 });
 
 // Start server
