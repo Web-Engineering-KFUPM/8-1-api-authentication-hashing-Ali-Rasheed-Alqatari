@@ -256,6 +256,7 @@ app.get("/", (_req, res) => {
 // =========================
 app.post("/register", async (req, res) => {
   // Implement logic here based on the TODO 1.
+  return res.status(501).json({ error: "Registration not yet implemented" });
 });
 
 // =========================
